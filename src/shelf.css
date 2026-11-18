@@ -53,7 +53,6 @@
 .shelf-item { border-top: 1px solid var(--line); padding-block: 10px; overflow-wrap: anywhere; }
 .shelf-item:first-of-type { margin-top: 12px; }
 .shelf-note { white-space: pre-wrap; }
-.shelf-excerpt { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .shelf-source-link { display: inline; text-decoration: underline; text-underline-offset: 3px; color: var(--green); overflow-wrap: anywhere; }
 .shelf-source-link svg { display: inline; margin-left: 3px; }
 .shelf label.shelf-check { display: flex; align-items: baseline; gap: 7px; }

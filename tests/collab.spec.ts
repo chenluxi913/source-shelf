@@ -246,3 +246,41 @@ test('SourceShelf recovers from empty and failed searches on a narrow screen', a
   await expect(page.getByRole('link', { name: 'An example source' })).toHaveAttribute('href', 'https://example.com/')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
 })
+
+test('Wikipedia proxy renders plain text and falls back when credits run out', async ({ users }) => {
+  const [{ page }] = await users(1)
+  let available = true
+  await page.route('**/api/integrations/wikipedia/search-pages', (route) =>
+    route.fulfill({
+      status: available ? 200 : 402,
+      json: available
+        ? { success: true, data: [{
+          key: 'Sample_page', title: 'Sample page', thumbnail: null,
+          excerpt: '<span class="searchmatch">A</span> &quot;quoted&quot; &lt;img src=x&gt; fragment',
+        }] }
+        : { success: false, code: 'insufficient_credits', error: 'Not enough credits' },
+    }),
+  )
+  await page.goto('/home')
+  const title = `Wikipedia proxy ${crypto.randomUUID().slice(0, 8)}`
+  await page.getByLabel('New topic').fill(title)
+  await page.getByRole('button', { name: 'Create topic' }).click()
+  await expect(page.getByRole('heading', { name: title })).toBeVisible()
+  await page.getByLabel('Search provider').selectOption('wikipedia-proxy')
+  await page.getByLabel('Search query').fill('Distributed systems')
+  const search = page.getByRole('button', { name: 'Search', exact: true })
+  const discovery = page.getByRole('region', { name: 'Find sources' })
+  const snippet = 'A "quoted" <img src=x> fragment…'
+  await search.click()
+  await expect(discovery.getByText(snippet)).toBeVisible()
+  await expect(discovery.locator('img')).toHaveCount(0)
+  await discovery.getByRole('button', { name: 'Save source', exact: true }).click()
+  await page.getByRole('checkbox', { name: 'Select Sample page' }).check()
+  await page.getByRole('button', { name: 'Generate summary' }).click()
+  await expect(page.getByRole('region', { name: 'Cited summaries' }).getByText(snippet, { exact: false })).toBeVisible()
+
+  available = false
+  await search.click()
+  await expect(discovery.getByText('Not enough DeepSpace credits. Used direct Wikipedia search.')).toBeVisible({ timeout: 18_000 })
+  await expect(discovery.getByRole('button', { name: 'Save source', exact: true }).first()).toBeVisible()
+})

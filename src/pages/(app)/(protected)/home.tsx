@@ -3,7 +3,7 @@ import { useAuth, useQuery } from 'deepspace'
 import { ArrowUpRight, BookOpen, FileText, Library, Plus, Search, Users } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { research, searchSources, type SearchProvider } from '@/lib/research-client'
-import type { Entry, Source } from '@/lib/research'
+import { citationExcerpt, sourceExcerpt, type Entry, type Source } from '@/lib/research'
 import '@/shelf.css'
 
 type Topic = { title: string; teamId: string }
@@ -134,7 +134,7 @@ function TopicView({ topicId, title, owner }: { topicId: string; title: string; 
             Select {data.content.title}
           </label>
           <SourceLink source={data.content} />
-          <p className="shelf-excerpt">{data.content.excerpt}</p>
+          <p className="shelf-excerpt">{sourceExcerpt(data.content)}</p>
         </article>)}
         <label className="shelf-check">
           <input type="checkbox" checked={ai} onChange={(event) => setAi(event.target.checked)} />
@@ -160,7 +160,7 @@ function TopicView({ topicId, title, owner }: { topicId: string; title: string; 
           <h3>{data.content.method === 'ai' ? 'AI synthesis' : 'Excerpt summary'}</h3>
           <ol>
             {data.content.citations.map((citation, index) => <li key={index}>
-              <p>{citation.text} <SourceLink source={citation} /></p>
+              <p>{data.content.method === 'excerpts' ? citationExcerpt(citation) : citation.text} <SourceLink source={citation} /></p>
             </li>)}
           </ol>
         </article>)}
@@ -176,7 +176,8 @@ function SourceLink({ source }: { source: Pick<Source, 'title' | 'url'> }) {
 function Discovery({ topicId, saved }: { topicId: string; saved: string[] }) {
   const [query, setQuery] = useState('')
   const [provider, setProvider] = useState<SearchProvider>('wikipedia')
-  const [results, setResults] = useState<Source[] | null>(null)
+  const [result, setResult] = useState<Awaited<ReturnType<typeof searchSources>> | null>(null)
+  const results = result?.sources
   const search = useOperation()
   const save = useOperation()
   const [manual, setManual] = useState(false)
@@ -184,10 +185,10 @@ function Discovery({ topicId, saved }: { topicId: string; saved: string[] }) {
 
   function submitSearch(event: FormEvent) {
     event.preventDefault()
-    setResults(null)
+    setResult(null)
     void search.run(async () => {
       if (query.trim().length < 2) throw new Error('Enter at least two characters.')
-      setResults(await searchSources(topicId, provider, query.trim()))
+      setResult(await searchSources(topicId, provider, query.trim()))
     })
   }
 
@@ -217,16 +218,18 @@ function Discovery({ topicId, saved }: { topicId: string; saved: string[] }) {
         <button className="shelf-button shelf-primary" disabled={search.pending}>{search.pending ? 'Searching…' : 'Search'}</button>
       </div>
       <label htmlFor="search-provider">Search provider</label>
-      <select id="search-provider" value={provider} onChange={(event) => setProvider(event.target.value as SearchProvider)}>
-        <option value="wikipedia">Wikipedia</option>
+      <select id="search-provider" value={provider} disabled={search.pending} onChange={(event) => setProvider(event.target.value as SearchProvider)}>
+        <option value="wikipedia">Wikipedia · direct · no credits</option>
+        <option value="wikipedia-proxy">Wikipedia via DeepSpace · $0.0013 per search</option>
         <option value="exa">Exa · broader web · uses credits</option>
       </select>
     </form>
     <Feedback error={search.error} />
+    {result?.notice && <p role="status">{result.notice}</p>}
     {results?.length === 0 && <p role="status">No results with usable excerpts. Try a different query.</p>}
     {results?.map((source) => <article className="shelf-item" key={source.url}>
       <SourceLink source={source} />
-      <p className="shelf-excerpt">{source.excerpt}</p>
+      <p className="shelf-excerpt">{sourceExcerpt(source)}</p>
       <button className="shelf-button" disabled={save.pending || saved.includes(source.url) || added.includes(source.url)}
         onClick={() => void save.run(() => saveSource(source))}>{saved.includes(source.url) || added.includes(source.url) ? 'Saved' : 'Save source'}</button>
     </article>)}
